@@ -1,7 +1,11 @@
+# ==========================
+# HyperRealFaceWeb: app.py (Stable Version)
+# ==========================
 import os
 from flask import Flask, request, render_template, send_file
 import tensorflow as tf
 import numpy as np
+from PIL import Image
 import cv2
 import gdown
 
@@ -31,27 +35,40 @@ if not os.path.exists(MODEL_FILE):
 # ==========================
 model = tf.keras.models.load_model(MODEL_FILE)
 
+# Automatically detect last convolutional layer
+conv_layers = [l.name for l in model.layers if 'conv' in l.name]
+LAST_CONV = conv_layers[-1] if conv_layers else model.layers[-1].name
+
 # ==========================
 # TTA Prediction
 # ==========================
 def predict_tta(img_path, model, tta_rounds=7):
     img = tf.keras.utils.load_img(img_path, target_size=(IMG_SIZE, IMG_SIZE))
+    img = img.convert("RGB")  # ensure 3 channels
     x = tf.keras.utils.img_to_array(img)/255.0
-    preds = []
+    preds=[]
     for _ in range(tta_rounds):
         aug = tf.image.random_flip_left_right(x)
         aug = tf.image.random_brightness(aug, max_delta=0.1)
-        aug = tf.expand_dims(aug, 0)
+        aug = tf.expand_dims(aug,0)
         preds.append(model.predict(aug, verbose=0)[0])
     final_pred = np.mean(preds, axis=0)
-    label_idx = int(final_pred > 0.5)
+    label_idx = int(final_pred>0.5)
     return CLASS_NAMES[label_idx], final_pred[label_idx]*100, x[np.newaxis,...]
 
 # ==========================
 # Grad-CAM
 # ==========================
-def grad_cam(img_array, model, last_conv="Conv_1", alpha=0.4):
-    grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(last_conv).output, model.output])
+def grad_cam(img_array, model, last_conv=LAST_CONV, alpha=0.4):
+    try:
+        grad_model = tf.keras.models.Model([model.inputs],
+                                           [model.get_layer(last_conv).output, model.output])
+    except ValueError:
+        # fallback if layer name fails
+        conv_layers = [l.name for l in model.layers if 'conv' in l.name]
+        last_conv = conv_layers[-1]
+        grad_model = tf.keras.models.Model([model.inputs],
+                                           [model.get_layer(last_conv).output, model.output])
     with tf.GradientTape() as tape:
         conv_out, pred = grad_model(img_array)
         loss = pred[:,0]
@@ -59,40 +76,41 @@ def grad_cam(img_array, model, last_conv="Conv_1", alpha=0.4):
     weights = tf.reduce_mean(grads, axis=(0,1))
     cam = np.dot(conv_out[0], weights.numpy())
     cam = cv2.resize(cam, (IMG_SIZE, IMG_SIZE))
-    cam = np.maximum(cam, 0)
-    cam = cam / (cam.max() + 1e-8)
+    cam = np.maximum(cam,0)
+    cam = cam / (cam.max()+1e-8)
     heatmap = cv2.applyColorMap(np.uint8(255*cam), cv2.COLORMAP_JET)
     overlay = cv2.addWeighted(np.uint8(img_array[0]*255), 1-alpha, heatmap, alpha, 0)
     return overlay
 
 # ==========================
-# Routes
+# Flask Routes
 # ==========================
 @app.route("/", methods=["GET", "POST"])
 def index():
-    if request.method == "POST":
-        file = request.files["image"]
-        filename = file.filename
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
+    try:
+        if request.method == "POST":
+            file = request.files["image"]
+            filename = file.filename
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
 
-        # Prediction
-        label, prob, img_array = predict_tta(filepath, model)
+            # Prediction
+            label, prob, img_array = predict_tta(filepath, model)
 
-        # Grad-CAM
-        cam_overlay = grad_cam(img_array, model)
-        cam_path = os.path.join(GRADCAM_FOLDER, f"gradcam_{filename}")
-        cv2.imwrite(cam_path, cv2.cvtColor(cam_overlay, cv2.COLOR_RGB2BGR))
+            # Grad-CAM
+            cam_overlay = grad_cam(img_array, model)
+            cam_path = os.path.join(GRADCAM_FOLDER, f"gradcam_{filename}")
+            cv2.imwrite(cam_path, cv2.cvtColor(cam_overlay, cv2.COLOR_RGB2BGR))
 
-        return f"""
-        <h2>Prediction: {label}</h2>
-        <h3>Confidence: {prob:.2f}%</h3>
-        <h3>Grad-CAM:</h3>
-        <img src="/gradcam/{filename}" width="300">
-        <br><br>
-        <a href="/">Back</a>
-        """
-    return render_template("index.html")
+            return f"""
+            <h2>Prediction: {label}</h2>
+            <h3>Confidence: {prob:.2f}%</h3>
+            <h3>Grad-CAM:</h3>
+            <img src="/gradcam/{filename}" width="300">
+            """
+        return render_template("index.html")
+    except Exception as e:
+        return f"<h3>Server Error:</h3><pre>{e}</pre>"
 
 @app.route("/gradcam/<filename>")
 def gradcam_file(filename):
