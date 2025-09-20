@@ -1,21 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>HyperReal Face Detector</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HyperRealFace Detector</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>HyperReal Face Detector</h1>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="image" required>
-        <button type="submit">Predict</button>
-    </form>
-
-    {% if label %}
-        <h2>Prediction: {{ label }}</h2>
-        <h3>Confidence: {{ prob|round(2) }}%</h3>
-        <h3>Grad-CAM:</h3>
-        <img src="/gradcam/{{ cam_file }}" width="300">
-    {% endif %}
+    <div class="container">
+        <h1>HyperRealFace Detector</h1>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/*" required>
+            <button type="submit">Predict</button>
+        </form>
+    </div>
 </body>
 </html>
