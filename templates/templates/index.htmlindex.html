@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HyperReal Face Detector</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>HyperReal Face Detector</h1>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/*" required>
+            <button type="submit">Predict</button>
+        </form>
+
+        {% if label %}
+        <div class="result">
+            <h2>Prediction: {{ label }}</h2>
+            <h3>Confidence: {{ prob|round(2) }}%</h3>
+            <h3>Grad-CAM:</h3>
+            <img src="/gradcam/{{ filename }}" width="300">
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
