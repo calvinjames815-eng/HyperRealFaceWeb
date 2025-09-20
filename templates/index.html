@@ -3,18 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HyperRealFace Detector</title>
+    <title>HyperRealFace Detection</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>HyperRealFace Detector</h1>
+        <h1>HyperRealFace Detection</h1>
         <form method="POST" enctype="multipart/form-data">
             <input type="file" name="image" accept="image/*" required>
-            <button type="submit">Predict</button>
+            <button type="submit">Upload & Predict</button>
         </form>
-        <div class="result">
-            <!-- Prediction + Grad-CAM will be displayed here -->
+        <div id="result">
+            {% if prediction %}
+                <h2>Prediction: {{ prediction.label }}</h2>
+                <h3>Confidence: {{ prediction.prob }}%</h3>
+                <img src="{{ url_for('gradcam_file', filename=prediction.filename) }}" width="300">
+            {% endif %}
         </div>
     </div>
 </body>
