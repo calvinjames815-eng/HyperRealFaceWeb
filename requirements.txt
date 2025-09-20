@@ -7,5 +7,3 @@ pillow
 matplotlib
 scikit-learn
 gdown
-git+https://github.com/jacobgil/pytorch-grad-cam.git
-gunicorn
