@@ -1,5 +1,5 @@
 # ==========================
-# HyperRealFaceWeb: app.py (Render-ready & stable)
+# HyperRealFaceWeb: app.py (Stable for Render)
 # ==========================
 import os
 from flask import Flask, request, render_template, send_file
@@ -25,7 +25,7 @@ CLASS_NAMES = ["AI_Faces", "Real_Faces"]
 # Download model from Google Drive if missing
 # ==========================
 MODEL_FILE = "CNN_HyperRealFaces_BestModel.h5"
-GDRIVE_ID = "1nVn9DMoMUEt_csgDNTA-JOy5SWVN5U1X"  # your file id
+GDRIVE_ID = "1nVn9DMoMUEt_csgDNTA-JOy5SWVN5U1X"  # replace with your file ID
 if not os.path.exists(MODEL_FILE):
     url = f"https://drive.google.com/uc?id={GDRIVE_ID}"
     gdown.download(url, MODEL_FILE, quiet=False)
@@ -36,11 +36,11 @@ if not os.path.exists(MODEL_FILE):
 model = tf.keras.models.load_model(MODEL_FILE)
 
 # ==========================
-# TTA Prediction
+# TTA Prediction (fixed for array shape)
 # ==========================
 def predict_tta(img_path, model, tta_rounds=7):
     img = tf.keras.utils.load_img(img_path, target_size=(IMG_SIZE, IMG_SIZE))
-    x = tf.keras.utils.img_to_array(img)/255.0
+    x = tf.keras.utils.img_to_array(img) / 255.0
     preds = []
     for _ in range(tta_rounds):
         aug = tf.image.random_flip_left_right(x)
@@ -48,44 +48,35 @@ def predict_tta(img_path, model, tta_rounds=7):
         aug = tf.expand_dims(aug, 0)
         preds.append(model.predict(aug, verbose=0)[0])
     final_pred = np.mean(preds, axis=0)
-    label_idx = int(final_pred > 0.5)
-    return CLASS_NAMES[label_idx], final_pred[label_idx]*100, x[np.newaxis,...]
+    # if model output is single value (sigmoid)
+    if final_pred.shape == ():  
+        label_idx = int(final_pred > 0.5)
+        prob = final_pred * 100
+    else:  # multi-class
+        label_idx = int(np.argmax(final_pred))
+        prob = final_pred[label_idx] * 100
+    return CLASS_NAMES[label_idx], prob, x[np.newaxis, ...]
 
 # ==========================
-# Stable Grad-CAM
+# Grad-CAM
 # ==========================
 def grad_cam(img_array, model, last_conv="Conv_1", alpha=0.4):
-    # Ensure batch dimension
-    if img_array.ndim == 3:
-        img_array = np.expand_dims(img_array, 0)
-
-    grad_model = tf.keras.models.Model(
-        [model.inputs],
-        [model.get_layer(last_conv).output, model.output]
-    )
-
+    grad_model = tf.keras.models.Model([model.inputs], [model.get_layer(last_conv).output, model.output])
     with tf.GradientTape() as tape:
         conv_out, pred = grad_model(img_array)
-        loss = pred[:,0]
-
-    grads = tape.gradient(loss, conv_out)
-    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
-
-    conv_out = conv_out[0].numpy()
-    heatmap = np.zeros(conv_out.shape[:2], dtype=np.float32)
-
-    for i, w in enumerate(pooled_grads):
-        heatmap += w * conv_out[:,:,i]
-
-    heatmap = np.maximum(heatmap, 0)
-    heatmap /= (heatmap.max() + 1e-8)
-    heatmap = cv2.resize(heatmap, (IMG_SIZE, IMG_SIZE))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-
-    original = np.uint8(img_array[0]*255)
-    overlay = cv2.addWeighted(original, 1-alpha, heatmap, alpha, 0)
-
+        # handle multi-output models
+        if len(pred.shape) == 2 and pred.shape[1] == 1:
+            loss = pred[:, 0]
+        else:
+            loss = tf.reduce_max(pred, axis=1)
+    grads = tape.gradient(loss, conv_out)[0]
+    weights = tf.reduce_mean(grads, axis=(0, 1))
+    cam = np.dot(conv_out[0], weights.numpy())
+    cam = cv2.resize(cam, (IMG_SIZE, IMG_SIZE))
+    cam = np.maximum(cam, 0)
+    cam = cam / (cam.max() + 1e-8)
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+    overlay = cv2.addWeighted(np.uint8(img_array[0] * 255), 1 - alpha, heatmap, alpha, 0)
     return overlay
 
 # ==========================
@@ -125,7 +116,7 @@ def gradcam_file(filename):
     return send_file(os.path.join(GRADCAM_FOLDER, f"gradcam_{filename}"))
 
 # ==========================
-# Run on Render
+# Run Flask on Render
 # ==========================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
