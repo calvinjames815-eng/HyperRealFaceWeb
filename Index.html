@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HyperReal Face Detector</title>
+  <title>HyperRealFace Detector</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <h1>HyperReal Face Detector</h1>
-  <video id="webcam" autoplay playsinline width="224" height="224"></video>
-  <button id="capture">Predict</button>
-  <p id="result"></p>
-  <canvas id="canvas" width="224" height="224" style="display:none;"></canvas>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="app.js"></script>
+  <div class="container">
+    <h1>HyperRealFace Detector</h1>
+    <input type="file" id="file-input" accept="image/*">
+    <img id="input-image" style="display:none;" />
+    <pre id="prediction"></pre>
+  </div>
 </body>
 </html>
