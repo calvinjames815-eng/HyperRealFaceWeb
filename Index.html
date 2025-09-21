@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HyperReal Face Detector</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>HyperReal Face Detector</h1>
+  <video id="webcam" autoplay playsinline width="224" height="224"></video>
+  <button id="capture">Predict</button>
+  <p id="result"></p>
+  <canvas id="canvas" width="224" height="224" style="display:none;"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="app.js"></script>
+</body>
+</html>
